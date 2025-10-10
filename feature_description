@@ -1,0 +1,11 @@
+cmd service that syncs 2 folders
+sync must be one-way -> original folder must not be touched
+arguments: sync period, source and destination folders, logfile path
+when the sync runs, only sync changes. do not sync the whole folder again and again.
+
+sync all actions that may occur inside the folder: creation, deletion, copying, removal, renaming (name+subdirectory change)
+log everything to the provided logfile -> each row should contain timestamp, action, target
+if a subdir is affected, only log create / delete / rename. do not log changes to the contents. only log changes to the end files.
+what will happen if the source and destination folders are renamed when the service is running?
+
+write tests for all of the above
