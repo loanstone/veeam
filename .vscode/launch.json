@@ -7,7 +7,7 @@
             "request": "launch",
             "preLaunchTask": "dotnet: build",
             "program": "${workspaceFolder}/FolderSync/bin/Debug/net8.0/FolderSync.dll",
-            "args": ["--syncPeriod", "10", "--sourceFolder", "/path/to/source", "--destFolder", "/path/to/dest", "--log", "/path/to/log.log"],
+            "args": ["--syncPeriod", "10", "--sourceFolder", "C:\\logging\\log.log", "--destFolder", "/path/to/dest", "--log", "/path/to/log.log"],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false
         }

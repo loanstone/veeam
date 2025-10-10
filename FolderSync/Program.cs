@@ -6,38 +6,52 @@ namespace FolderSync
 {
     public class FolderSync
     {
-        private static int syncPeriod = 60; // Set default sync rate to 60 minutes
+        private static int syncPeriod;
         private static string sourceFolder;
         private static string destinationFolder;
-        private static string logFilePath = Directory.GetCurrentDirectory(); // Set default log file path to the current dir
-        private static System.PlatformID platform;
+        private static string logFilePath;
+        private static string platform;
 
         public static void Main(string[] args)
         {
-            platform = Environment.OSVersion.Platform;
+            platform = Environment.OSVersion.Platform.ToString();
             IConfiguration config = new ConfigurationBuilder().AddCommandLine(args).Build();
             ParseArgs(config);
         }
 
         private static void ParseArgs(IConfiguration config)
         {
-            Dictionary<string, bool> isSet;
             foreach (var kvp in config.AsEnumerable())
             {
                 switch (kvp.Key)
                 {
                     case "syncPeriod":
                         if (!Int32.TryParse(kvp.Value, out syncPeriod))
+                        {
                             Console.WriteLine($"{kvp.Value} is not a valid integer for sync. Reverting back to default 60 minutes.");
+                            syncPeriod = 60;
+                        }
                         break;
                     case "sourceFolder":
-                        sourceFolder = EnsureOsDirectory(kvp.Value);
+                        if (DoesDirExist(kvp.Value))
+                            sourceFolder = kvp.Value;
+                        else
+                            InvalidPath(kvp.Value);                    
                         break;
                     case "destFolder":
-                        destinationFolder = EnsureOsDirectory(kvp.Value);
+                        if (DoesDirExist(kvp.Value))
+                            destinationFolder = kvp.Value;
+                        else
+                            InvalidPath(kvp.Value);
                         break;
                     case "log":
-                        logFilePath = EnsureOsDirectory(kvp.Value);
+                        if (DoesDirExist(Path.GetDirectoryName(kvp.Value)))
+                            logFilePath = kvp.Value;
+                        else
+                        {
+                            Console.WriteLine($"The directory {kvp.Value} does not exist, defaulting to {Path.Combine(Directory.GetCurrentDirectory(), "Log.log")}");
+                            logFilePath = Path.Combine(Directory.GetCurrentDirectory(), "Log.log");
+                        }
                         break;
                     default:
                         Console.WriteLine($"{kvp.Key} is not a supported argument");
@@ -45,10 +59,16 @@ namespace FolderSync
                 }
             }
         }
-        
-        private static string EnsureOsDirectory(string argPath)
+
+        private static bool DoesDirExist(string argPath)
         {
-            return argPath;
+            return Directory.Exists(argPath);
+        }
+        
+        private static void InvalidPath(string value)
+        {
+            Console.WriteLine($"{value} is not a valid directory on your system");
+            Environment.Exit(0);
         }
     }
 }
