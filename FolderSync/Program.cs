@@ -11,11 +11,9 @@ namespace FolderSync
         private static string sourceFolder;
         private static string destinationFolder;
         private static string logFilePath;
-        private static string platform;
 
         public static void Main(string[] args)
         {
-            platform = Environment.OSVersion.Platform.ToString();
             IConfiguration config = new ConfigurationBuilder().AddCommandLine(args).Build();
             ParseArgs(config);
             Sync();
