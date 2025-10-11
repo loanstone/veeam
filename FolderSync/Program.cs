@@ -2,6 +2,7 @@
 using System.IO;
 using Microsoft.Extensions.Configuration;
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 
 namespace FolderSync
 {
@@ -74,7 +75,12 @@ namespace FolderSync
             string[] destFiles = RemoveRoot(Directory.GetFiles(destinationFolder, "*", SearchOption.AllDirectories), ref destinationFolder);
             string[] destDirs = RemoveRoot(Directory.GetDirectories(destinationFolder, "*", SearchOption.AllDirectories), ref destinationFolder);
 
-            
+
+
+            // if (!AreEqual(sourceDirs, destDirs))
+            // {
+
+            // }
         }
         
         private static string[] RemoveRoot(string[] fsCollection, ref string root)
@@ -83,15 +89,22 @@ namespace FolderSync
             {
                 fsCollection[i] = fsCollection[i].Replace(root, "");
             }
-            return fsCollection;
+            return fsCollection.OrderBy(s=>s).ToArray();
         }
 
-        // private static bool AreEqual(string[] source, string[] destination)
-        // {
-        //     if (source.Length != destination.Length)
-        //         return false;
-            
-        // }
+        private static bool AreEqual(string[] source, string[] destination)
+        {
+            if (source.Length != destination.Length)
+                return false;
+
+            for (int i = 0; i < source.Length; i++)
+            {
+                if (source[i] != destination[i])
+                    return false;
+            }
+
+            return true;
+        }
 
         private static string CalculateMD5(string file)
         {
@@ -105,37 +118,51 @@ namespace FolderSync
             }
         }
 
-        private static bool CompareMd5(string checksum1, string checksum2)
+        private static bool CompareMd5(string origin, string backup)
         {
-            return String.Equals(checksum1, checksum2, StringComparison.OrdinalIgnoreCase);
+            return String.Equals(CalculateMD5(origin), CalculateMD5(backup), StringComparison.OrdinalIgnoreCase);
         }
 
         enum Actions
         {
-            Create,
-            Delete,
-            Copy,
-            Rename,
-            Move
+            Created,
+            Deleted,
+            Copied,
+            Renamed,
+            Moved
         }
 
-        private static void Log(string name, Actions action)
+        private static void Log(string filename, string fullDestinationName, Actions action)
         {
+            string dt = DateTime.Now.ToString("dd-MM-yyyy HH:mm");
+            string grammar = "";
             switch (action)
             {
-                case Actions.Create:
+                case Actions.Created:
+                    grammar = "in";
                     break;
-                case Actions.Delete:
+                case Actions.Deleted:
+                    grammar = "from";
                     break;
-                case Actions.Copy:
-                    break;
-                case Actions.Rename:
-                    break;
-                case Actions.Move:
+                case Actions.Copied:
+                case Actions.Renamed:
+                case Actions.Moved:
+                    grammar = "to";
                     break;
                 default:
                     break;
             }
+            string logTemplate = $"{dt} - {filename} was {action} {grammar} {fullDestinationName}";
+            Console.WriteLine(logTemplate);
+
+            if (!File.Exists(logFilePath))
+                File.Create(logFilePath);
+
+            using (var logFile = File.AppendText(logFilePath))
+            {
+                logFile.WriteLine(logTemplate);
+            }
+            
         }
     }
 }
