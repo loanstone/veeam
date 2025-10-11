@@ -69,14 +69,23 @@ namespace FolderSync
 
         private static void Sync()
         {
-            string[] sourceFiles = Directory.GetFiles(sourceFolder, "*", SearchOption.AllDirectories);
-            string[] sourceDirs = Directory.GetDirectories(sourceFolder, "*", SearchOption.AllDirectories);
-            string[] destFiles = Directory.GetFiles(destinationFolder, "*", SearchOption.AllDirectories);
-            string[] destDirs = Directory.GetDirectories(destinationFolder, "*", SearchOption.AllDirectories);
+            string[] sourceFiles = RemoveRoot(Directory.GetFiles(sourceFolder, "*", SearchOption.AllDirectories), ref sourceFolder);
+            string[] sourceDirs = RemoveRoot(Directory.GetDirectories(sourceFolder, "*", SearchOption.AllDirectories), ref sourceFolder);
+            string[] destFiles = RemoveRoot(Directory.GetFiles(destinationFolder, "*", SearchOption.AllDirectories), ref destinationFolder);
+            string[] destDirs = RemoveRoot(Directory.GetDirectories(destinationFolder, "*", SearchOption.AllDirectories), ref destinationFolder);
 
-
+            
         }
         
+        private static string[] RemoveRoot(string[] fsCollection, ref string root)
+        {
+            for(int i = 0; i < fsCollection.Length; i++)
+            {
+                fsCollection[i] = fsCollection[i].Replace(root, "");
+            }
+            return fsCollection;
+        }
+
         // private static bool AreEqual(string[] source, string[] destination)
         // {
         //     if (source.Length != destination.Length)
