@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using Microsoft.Extensions.Configuration;
-using System.Security.Cryptography;
+
 using System.Runtime.InteropServices;
 
 namespace FolderSync
@@ -49,11 +49,11 @@ namespace FolderSync
                         break;
                     case "log":
                         if (Directory.Exists(kvp.Value))
-                            logFilePath = Path.Combine(kvp.Value, $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy HH:mm")}.log");
+                            logFilePath = Path.Combine(kvp.Value, $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log");
                         else
                         {
                             Console.WriteLine($"The directory {kvp.Value} does not exist, defaulting to {Path.Combine(Directory.GetCurrentDirectory(), "Log.log")}");
-                            logFilePath = Path.Combine(Directory.GetCurrentDirectory(), $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy HH:mm")}.log");
+                            logFilePath = Path.Combine(Directory.GetCurrentDirectory(), $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log");
                         }
                         break;
                     default:
@@ -70,17 +70,55 @@ namespace FolderSync
 
         private static void Sync()
         {
-            string[] sourceFiles = RemoveRoot(Directory.GetFiles(sourceFolder, "*", SearchOption.AllDirectories), ref sourceFolder);
-            string[] sourceDirs = RemoveRoot(Directory.GetDirectories(sourceFolder, "*", SearchOption.AllDirectories), ref sourceFolder);
-            string[] destFiles = RemoveRoot(Directory.GetFiles(destinationFolder, "*", SearchOption.AllDirectories), ref destinationFolder);
-            string[] destDirs = RemoveRoot(Directory.GetDirectories(destinationFolder, "*", SearchOption.AllDirectories), ref destinationFolder);
+            List<FileProps> sourceFileList = new List<FileProps>();
+            List<FileProps> backupFileList = new List<FileProps>();
+            FileProps sourceProps;
+            FileProps backupProps;
+            string[] sourceFiles = Directory.GetFiles(sourceFolder, "*", SearchOption.AllDirectories);
+            foreach (string file in sourceFiles)
+            {
+                sourceProps = new FileProps(file, sourceFolder);
+                sourceFileList.Add(sourceProps);
+            }
 
+            string[] destFiles = Directory.GetFiles(destinationFolder, "*", SearchOption.AllDirectories);
+            foreach (string file in destFiles)
+            {
+                backupProps = new FileProps(file, destinationFolder);
+                backupFileList.Add(backupProps);
+            }
 
+            foreach(var file in sourceFileList)
+            {
+                var matchingBackupByFile = backupFileList.FindAll(backup => backup.RelativeFilePath == file.RelativeFilePath); // the problem here is if there are multiple occurrences of the same file
+                var matchingBackupByMD5 = backupFileList.FindAll(backup => backup.md5Code == file.md5Code); // the problem here is if there are multiple occurrences of the same md5
 
-            // if (!AreEqual(sourceDirs, destDirs))
-            // {
+                // if (backupDict.ContainsKey(kvp.Key) && IsSameMD5(backupDict[kvp.Key], sourceDict[kvp.Key])) // nothing to do here, both files are the same
+                //     continue;
+                // else if (!backupDict.ContainsKey(kvp.Key) && !backupDict.ContainsValue(kvp.Value)) // the original file has no backup, it will be created here
+                // {
+                //     string newFile = Path.Combine(destinationFolder, kvp.Key);
+                //     string newDirectory = Path.GetDirectoryName(newFile);
+                //     if (!Directory.Exists(newDirectory))
+                //         Directory.CreateDirectory(newDirectory);
+                //     File.Copy(Path.Combine(sourceFolder, kvp.Key), newFile);
+                //     Log(Path.GetFileName(newFile), newDirectory, Actions.created);
+                // }
+                // else if (backupDict.ContainsKey(kvp.Key) && !IsSameMD5(backupDict[kvp.Key], sourceDict[kvp.Key])) // the original file was modified
+                // {
+                //     string file = Path.Combine(destinationFolder, kvp.Key);
+                //     File.Delete(file);
+                //     File.Copy(Path.Combine(sourceFolder, kvp.Key), file);
+                //     Log(Path.GetFileName(file), Path.GetDirectoryName(file), Actions.edited);
+                // }
+                // else if (!backupDict.ContainsKey(kvp.Key) && backupDict.ContainsValue(kvp.Value)) // the original file was moved or renamed
+                // {
+                //     // check if it was renamed
+                //     string originalPath = RemoveRoot(Path.GetDirectoryName(Path.Combine(sourceFolder, kvp.Key)), ref sourceFolder); // why am i not getting back the stripped path?
 
-            // }
+                //     // check if it was moved
+                // }
+            }
         }
         
         private static string[] RemoveRoot(string[] fsCollection, ref string root)
@@ -92,44 +130,25 @@ namespace FolderSync
             return fsCollection.OrderBy(s=>s).ToArray();
         }
 
-        private static bool AreEqual(string[] source, string[] destination)
+        private static string RemoveRoot(string path, ref string root)
         {
-            if (source.Length != destination.Length)
-                return false;
-
-            for (int i = 0; i < source.Length; i++)
-            {
-                if (source[i] != destination[i])
-                    return false;
-            }
-
-            return true;
+            path = path.Replace(root, "");
+            return path;
         }
 
-        private static string CalculateMD5(string file)
+        private static bool IsSameMD5(string origin, string backup)
         {
-            using (var md5 = MD5.Create())
-            {
-                using (var stream = File.OpenRead(file))
-                {
-                    var hash = md5.ComputeHash(stream);
-                    return BitConverter.ToString(hash).Replace("-", "").ToLower();
-                }
-            }
-        }
-
-        private static bool CompareMd5(string origin, string backup)
-        {
-            return String.Equals(CalculateMD5(origin), CalculateMD5(backup), StringComparison.OrdinalIgnoreCase);
+            return String.Equals(origin, backup, StringComparison.OrdinalIgnoreCase);
         }
 
         enum Actions
         {
-            Created,
-            Deleted,
-            Copied,
-            Renamed,
-            Moved
+            created,
+            deleted,
+            copied,
+            renamed,
+            moved,
+            edited
         }
 
         private static void Log(string filename, string fullDestinationName, Actions action)
@@ -138,15 +157,16 @@ namespace FolderSync
             string grammar = "";
             switch (action)
             {
-                case Actions.Created:
+                case Actions.created:
+                case Actions.edited:
                     grammar = "in";
                     break;
-                case Actions.Deleted:
+                case Actions.deleted:
                     grammar = "from";
                     break;
-                case Actions.Copied:
-                case Actions.Renamed:
-                case Actions.Moved:
+                case Actions.copied:
+                case Actions.renamed:
+                case Actions.moved:
                     grammar = "to";
                     break;
                 default:
@@ -155,8 +175,11 @@ namespace FolderSync
             string logTemplate = $"{dt} - {filename} was {action} {grammar} {fullDestinationName}";
             Console.WriteLine(logTemplate);
 
+            if (!Directory.Exists(Path.GetDirectoryName(logFilePath)))
+                Directory.CreateDirectory(Path.GetDirectoryName(logFilePath));
+
             if (!File.Exists(logFilePath))
-                File.Create(logFilePath);
+                File.Create(logFilePath).Dispose();
 
             using (var logFile = File.AppendText(logFilePath))
             {
