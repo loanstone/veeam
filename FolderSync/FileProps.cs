@@ -5,6 +5,7 @@ namespace FolderSync
     public class FileProps
     {
         private readonly string _fileName;
+        private readonly string _root;
         private readonly string _absoluteFilePath;
         private readonly string _absolutePath;
         private readonly string _relativeFilePath;
@@ -14,6 +15,7 @@ namespace FolderSync
         public FileProps(string file, string sourceDir)
         {
             _fileName = Path.GetFileName(file);
+            _root = sourceDir;
             _absoluteFilePath = file;
             _relativeFilePath = file.Replace(sourceDir, "");
             _absolutePath = Path.GetDirectoryName(file);
@@ -23,12 +25,13 @@ namespace FolderSync
                 using (var stream = File.OpenRead(_absoluteFilePath))
                 {
                     var hash = md5.ComputeHash(stream);
-                    _md5Code = BitConverter.ToString(hash).Replace("-", "").ToLower();
+                    _md5Code = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
                 }
             }
         }
 
         public string FileName => _fileName;
+        public string RootFolder => _root;
         public string AbsoluteFilePath => _absoluteFilePath;
         public string AbsolutePath => _absolutePath;
         public string RelativeFilePath => _relativeFilePath;

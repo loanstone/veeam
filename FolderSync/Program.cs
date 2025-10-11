@@ -88,36 +88,53 @@ namespace FolderSync
                 backupFileList.Add(backupProps);
             }
 
-            foreach(var file in sourceFileList)
+            foreach (var file in sourceFileList)
             {
-                var matchingBackupByFile = backupFileList.FindAll(backup => backup.RelativeFilePath == file.RelativeFilePath); // the problem here is if there are multiple occurrences of the same file
-                var matchingBackupByMD5 = backupFileList.FindAll(backup => backup.md5Code == file.md5Code); // the problem here is if there are multiple occurrences of the same md5
+                var matchingBackupByFile = backupFileList.FindAll(backup => backup.RelativeFilePath == file.RelativeFilePath);
+                var matchingBackupByMD5 = backupFileList.FindAll(backup => backup.md5Code == file.md5Code);
 
-                // if (backupDict.ContainsKey(kvp.Key) && IsSameMD5(backupDict[kvp.Key], sourceDict[kvp.Key])) // nothing to do here, both files are the same
-                //     continue;
-                // else if (!backupDict.ContainsKey(kvp.Key) && !backupDict.ContainsValue(kvp.Value)) // the original file has no backup, it will be created here
-                // {
-                //     string newFile = Path.Combine(destinationFolder, kvp.Key);
-                //     string newDirectory = Path.GetDirectoryName(newFile);
-                //     if (!Directory.Exists(newDirectory))
-                //         Directory.CreateDirectory(newDirectory);
-                //     File.Copy(Path.Combine(sourceFolder, kvp.Key), newFile);
-                //     Log(Path.GetFileName(newFile), newDirectory, Actions.created);
-                // }
-                // else if (backupDict.ContainsKey(kvp.Key) && !IsSameMD5(backupDict[kvp.Key], sourceDict[kvp.Key])) // the original file was modified
-                // {
-                //     string file = Path.Combine(destinationFolder, kvp.Key);
-                //     File.Delete(file);
-                //     File.Copy(Path.Combine(sourceFolder, kvp.Key), file);
-                //     Log(Path.GetFileName(file), Path.GetDirectoryName(file), Actions.edited);
-                // }
-                // else if (!backupDict.ContainsKey(kvp.Key) && backupDict.ContainsValue(kvp.Value)) // the original file was moved or renamed
-                // {
-                //     // check if it was renamed
-                //     string originalPath = RemoveRoot(Path.GetDirectoryName(Path.Combine(sourceFolder, kvp.Key)), ref sourceFolder); // why am i not getting back the stripped path?
+                if (matchingBackupByFile.Count == 1 && matchingBackupByMD5.Count == 1) // File should be the same here, DOESN'T WORK IF FILE HAS A DIFFERENT NAME BUT THE SAME HASH
+                {
+                    var backupFile = matchingBackupByFile.First(a => a.RelativePath == file.RelativePath);
+                    if (backupFile.RelativeFilePath == file.RelativeFilePath && backupFile.md5Code == file.md5Code)
+                        continue;
+                }
+                else if (matchingBackupByFile.Count == 0 && matchingBackupByMD5.Count == 0) // File is not backed up, create a copy
+                {
+                    string destinationDir = Path.Combine(destinationFolder, file.RelativePath);
+                    string finalFile = Path.Combine(destinationDir, file.FileName);
+                    if (!Directory.Exists(destinationDir))
+                        Directory.CreateDirectory(destinationDir);
+                    File.Copy(file.AbsoluteFilePath, finalFile);
+                    Log(file.FileName, destinationDir, Actions.created);
+                }
+            }
 
-                //     // check if it was moved
-                // }
+            foreach(var file in backupFileList)
+            {
+                var matchingSourceByFile = sourceFileList.FindAll(source => source.RelativeFilePath == file.RelativeFilePath);
+                var matchingSourceByMD5 = sourceFileList.FindAll(source => source.md5Code == file.md5Code);
+
+                if (matchingSourceByFile.Count == 0 && matchingSourceByMD5.Count == 0) // the file was deleted
+                {
+                    File.Delete(file.AbsoluteFilePath);
+                    Log(file.FileName, file.AbsoluteFilePath, Actions.deleted);
+                }
+                else if (matchingSourceByMD5.Count > 1) // File was copied, maybe even renamed, but we're not checking for that - DOESN'T WORK
+                {
+                    foreach(var sourceFile in matchingSourceByMD5)
+                    {
+                        string destinationDir = Path.Combine(destinationFolder, sourceFile.RelativePath);
+                        string finalFile = Path.Combine(destinationDir, file.FileName);
+                        if (!Directory.Exists(destinationDir))
+                            Directory.CreateDirectory(destinationDir);
+                        if (!File.Exists(finalFile))
+                        {
+                            File.Copy(sourceFile.AbsoluteFilePath, finalFile);
+                            Log(sourceFile.FileName, destinationDir, Actions.copied);
+                        }
+                    }
+                }
             }
         }
         
