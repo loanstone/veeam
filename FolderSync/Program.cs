@@ -2,21 +2,29 @@
 using System.IO;
 using Microsoft.Extensions.Configuration;
 using System.Runtime.InteropServices;
+using System.Diagnostics.CodeAnalysis;
 
 namespace FolderSync
 {
     public class FolderSync
     {
+        [NotNull]
         private static int syncPeriod;
-        private static string sourceFolder;
-        private static string destinationFolder;
+        [NotNull]
+        private static string sourceRoot;
+        [NotNull]
+        private static string backupRoot;
+        [NotNull]
         private static string logFilePath;
+        private static List<FileProps> sourceFileList;
+        private static List<FileProps> backupFileList;
 
         public static void Main(string[] args)
         {
             IConfiguration config = new ConfigurationBuilder().AddCommandLine(args).Build();
             ParseArgs(config);
-            Sync();
+            InitalSync();
+            // Sync();
         }
 
         private static void ParseArgs(IConfiguration config)
@@ -36,13 +44,13 @@ namespace FolderSync
                         break;
                     case "sourceFolder":
                         if (Directory.Exists(kvp.Value))
-                            sourceFolder = kvp.Value;
+                            sourceRoot = kvp.Value;
                         else
                             InvalidPath(kvp.Value);                    
                         break;
                     case "destFolder":
                         if (Directory.Exists(kvp.Value))
-                            destinationFolder = kvp.Value;
+                            backupRoot = kvp.Value;
                         else
                             InvalidPath(kvp.Value);
                         break;
@@ -67,17 +75,15 @@ namespace FolderSync
             Environment.Exit(0);
         }
 
-        private static void Sync()
+        // Here we make sure that all required directories exist and clean the backup folder if the source is empty. We're not logging deletion here because it's not really a part of the actual file sync.
+        private static void InitalSync()
         {
-            List<FileProps> sourceFileList = new List<FileProps>();
-            List<FileProps> backupFileList = new List<FileProps>();
+            string[] sourceDirs = Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
+            string[] destDirs = Directory.GetDirectories(backupRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
 
-            string[] sourceDirs = Directory.GetDirectories(sourceFolder, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
-            string[] destDirs = Directory.GetDirectories(destinationFolder, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
-            
-            foreach(var dir in sourceDirs) // Make sure the folders that are in the source are also in the backup
+            foreach (var dir in sourceDirs) // Make sure the folders that are in the source are also in the backup
             {
-                string backupDir = dir.Replace(sourceFolder, destinationFolder);
+                string backupDir = dir.Replace(sourceRoot, backupRoot);
                 if (!Directory.Exists(backupDir))
                 {
                     Directory.CreateDirectory(backupDir);
@@ -85,50 +91,85 @@ namespace FolderSync
                 }
             }
 
-            string[] sourceFiles = Directory.GetFiles(sourceFolder, "*", SearchOption.AllDirectories);
-            foreach (string file in sourceFiles)
-                sourceFileList.Add(new FileProps(file, sourceFolder));
-
-            string[] destFiles = Directory.GetFiles(destinationFolder, "*", SearchOption.AllDirectories);
-            foreach (string file in destFiles)
-                backupFileList.Add(new FileProps(file, destinationFolder));
-
-            if (sourceFileList.Count == 0 && backupFileList.Count > 0) // If the source folder is empty, delete all files in the backup folder
+            if(Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories).Length == 0 && Directory.GetFiles(backupRoot, "*", SearchOption.AllDirectories).Length > 0)
             {
-                foreach (var file in backupFileList)
-                {
-                    File.Delete(file.AbsoluteFilePath);
-                    Log(file.FileName, file.AbsolutePath, Actions.deleted);
-                }
+                foreach (var file in Directory.GetFiles(backupRoot, "*", SearchOption.AllDirectories))
+                    File.Delete(file);
             }
-            if(sourceDirs.Length == 0 && destDirs.Length > 1)
+
+            if (sourceDirs.Length == 0 && destDirs.Length > 0) // If the source folder is empty, make sure the backup folder is empty as well
             {
-                for(int i = destDirs.Length - 1; i >= 0; --i)
-                {
+                for (int i = destDirs.Length - 1; i >= 0; --i)
                     Directory.Delete(destDirs[i]);
-                    Log(destDirs[i], Actions.deleted);
-                }
             }
+        }
+
+        private static void Sync()
+        {
+            sourceFileList = new List<FileProps>();
+            backupFileList = new List<FileProps>();
+            string[] sourceFiles = Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories);
+            foreach (string file in sourceFiles)
+                sourceFileList.Add(new FileProps(file, sourceRoot));
+
+            string[] destFiles = Directory.GetFiles(backupRoot, "*", SearchOption.AllDirectories);
+            foreach (string file in destFiles)
+                backupFileList.Add(new FileProps(file, backupRoot));
+
+            // if (sourceFileList.Count == 0 && backupFileList.Count > 0) // If the source folder is empty, delete all files in the backup folder
+            // {
+            //     foreach (var file in backupFileList)
+            //     {
+            //         File.Delete(file.GetAbsoluteFilePath);
+            //         Log(file.GetFileName, file.GetAbsolutePath, Actions.deleted);
+            //     }
+            // }
 
             foreach (var file in sourceFileList)
             {
-                var matchingBackupFile = backupFileList.Find(backup => backup.IsFileTheSame(file.RelativeFilePath, file.md5Code));
+                var matchingSourceFiles = sourceFileList.FindAll(source => source.IsFileCopied(file.GetFileName, file.GetMD5Code, file.GetRelativePath));
+                if (matchingSourceFiles.Count > 0) // An exact copy of the file exists in a different directory
+                {
+                    foreach (var matchingSourceFile in matchingSourceFiles)
+                    {
+                        var match = backupFileList.Find(backup => backup.IsFileTheSame(file.GetRelativeFilePath, file.GetMD5Code)); // See if the copy is already backed up
+                        if (match == null)
+                        {
+                            CreateCopyFile(file, Actions.copied);
+                            continue;
+                        }
+                    }
+                }
+                var matchingBackupFile = backupFileList.Find(backup => backup.IsFileTheSame(file.GetRelativeFilePath, file.GetMD5Code));
                 if (matchingBackupFile == null) // if no match of the file is found, create a backup
                 {
-                    File.Copy(file.AbsoluteFilePath, Path.Combine(destinationFolder, file.RelativeFilePath));
-                    Log(file.FileName, Path.Combine(destinationFolder, file.RelativePath), Actions.created);
+                    CreateCopyFile(file, Actions.created);
+                    continue;
                 }
             }
-            
-            foreach(var file in backupFileList)
+
+            foreach (var file in backupFileList)
             {
-                var matchingSourceFile = sourceFileList.Find(source => source.IsFileTheSame(file.RelativeFilePath, file.md5Code));
-                if(matchingSourceFile == null) // the file was deleted
+                var matchingSourceFile = sourceFileList.Find(source => source.IsFileTheSame(file.GetRelativeFilePath, file.GetMD5Code));
+                if (matchingSourceFile == null) // the file was deleted
                 {
-                    File.Delete(file.AbsoluteFilePath);
-                    Log(file.FileName, file.AbsolutePath, Actions.deleted);
+                    File.Delete(file.GetAbsoluteFilePath);
+                    Log(file.GetFileName, file.GetAbsolutePath, Actions.deleted);
                 }
             }
+
+        }
+
+        private static void CreateCopyFile(FileProps file, Actions action)
+        {
+            string newFile = Path.Combine(backupRoot, file.GetRelativeFilePath);
+            File.Copy(file.GetAbsoluteFilePath, newFile); // 
+            Log(file.GetFileName, newFile, action);
+        }
+
+        private static void EditFile(FileProps file, Actions action)
+        {
+            
         }
 
         enum Actions

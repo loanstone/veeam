@@ -12,13 +12,13 @@ namespace FolderSync
         private readonly string _relativePath;
         private readonly string _md5Code;
 
-        public FileProps(string file, string sourceDir)
+        public FileProps(string absoluteFilePath, string root)
         {
-            _fileName = Path.GetFileName(file);
-            _root = sourceDir;
-            _absoluteFilePath = file;
-            _relativeFilePath = file.Replace(sourceDir, "");
-            _absolutePath = Path.GetDirectoryName(file);
+            _fileName = Path.GetFileName(absoluteFilePath);
+            _root = root;
+            _absoluteFilePath = absoluteFilePath;
+            _relativeFilePath = absoluteFilePath.Replace(root, "");
+            _absolutePath = Path.GetDirectoryName(absoluteFilePath);
             _relativePath = _relativeFilePath.Replace(_fileName, "");
             using (var md5 = MD5.Create())
             {
@@ -30,22 +30,32 @@ namespace FolderSync
             }
         }
 
-        public string FileName => this._fileName;
-        public string RootFolder => this._root;
-        public string AbsoluteFilePath => this._absoluteFilePath;
-        public string AbsolutePath => this._absolutePath;
-        public string RelativeFilePath => this._relativeFilePath;
-        public string RelativePath => this._relativePath;
-        public string md5Code => this._md5Code;
+        public string GetFileName => this._fileName;
+        public string GetRootFolder => this._root;
+        public string GetAbsoluteFilePath => this._absoluteFilePath;
+        public string GetAbsolutePath => this._absolutePath;
+        public string GetRelativeFilePath => this._relativeFilePath;
+        public string GetRelativePath => this._relativePath;
+        public string GetMD5Code => this._md5Code;
 
         public bool IsFileTheSame(string comparedToPath, string comparedToMD5)
         {
-            return this.RelativeFilePath == comparedToPath && IsSameMD5(this.md5Code, comparedToMD5);
+            return this.GetRelativeFilePath == comparedToPath && IsSameMD5(this.GetMD5Code, comparedToMD5);
         }
 
-        public bool IsFileCopied(string comparedToName, string comparedToMD5)
+        public bool IsFileCopied(string comparedToName, string comparedToMD5, string comparedToRelativePath)
         {
-            return this.FileName == comparedToName && IsSameMD5(this.md5Code, comparedToMD5);
+            return (this.GetFileName == comparedToName && IsSameMD5(this.GetMD5Code, comparedToMD5)) && this.GetRelativePath != comparedToRelativePath;
+        }
+
+        public bool IsFileModified(string comparedToPath, string comparedToMD5)
+        {
+            return this.GetRelativeFilePath == comparedToPath && !IsSameMD5(this.GetMD5Code, comparedToMD5);
+        }
+
+        public bool IsFileMoved(string comparedToPath, string comparedToMD5)
+        {
+            return this.GetRelativeFilePath != comparedToPath && IsSameMD5(this.GetMD5Code, comparedToMD5);
         }
         
         private static bool IsSameMD5(string origin, string backup)
