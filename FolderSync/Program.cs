@@ -16,14 +16,20 @@ namespace FolderSync
         private static string backupRoot;
         [NotNull]
         private static string logFilePath;
-        private static List<FileProps> sourceFileList;
-        private static List<FileProps> backupFileList;
+        
 
         public static void Main(string[] args)
         {
             IConfiguration config = new ConfigurationBuilder().AddCommandLine(args).Build();
             ParseArgs(config);
             InitalSync();
+            CheckForMissingDirs();
+            CheckForMoodifiedFiles();
+            CheckForCopiesInSource();
+            CheckForMissingFiles();
+            CheckForDeletedFiles();
+            CheckForDeletedDirs();
+            CheckForMovedFiles();
             // Sync();
         }
 
@@ -104,72 +110,162 @@ namespace FolderSync
             }
         }
 
-        private static void Sync()
+        private static void CheckForMissingDirs()
         {
-            sourceFileList = new List<FileProps>();
-            backupFileList = new List<FileProps>();
-            string[] sourceFiles = Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories);
-            foreach (string file in sourceFiles)
-                sourceFileList.Add(new FileProps(file, sourceRoot));
+            string[] sourceDirs = Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
+            string[] destDirs = Directory.GetDirectories(backupRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
 
-            string[] destFiles = Directory.GetFiles(backupRoot, "*", SearchOption.AllDirectories);
-            foreach (string file in destFiles)
-                backupFileList.Add(new FileProps(file, backupRoot));
+            if (sourceDirs == destDirs)
+                return;
 
-            // if (sourceFileList.Count == 0 && backupFileList.Count > 0) // If the source folder is empty, delete all files in the backup folder
-            // {
-            //     foreach (var file in backupFileList)
-            //     {
-            //         File.Delete(file.GetAbsoluteFilePath);
-            //         Log(file.GetFileName, file.GetAbsolutePath, Actions.deleted);
-            //     }
-            // }
-
-            foreach (var file in sourceFileList)
+            foreach (var dir in sourceDirs) // Make sure the folders that are in the source are also in the backup
             {
-                var matchingSourceFiles = sourceFileList.FindAll(source => source.IsFileCopied(file.GetFileName, file.GetMD5Code, file.GetRelativePath));
-                if (matchingSourceFiles.Count > 0) // An exact copy of the file exists in a different directory
+                string backupDir = dir.Replace(sourceRoot, backupRoot);
+                if (!Directory.Exists(backupDir))
                 {
-                    foreach (var matchingSourceFile in matchingSourceFiles)
+                    Directory.CreateDirectory(backupDir);
+                    Log(backupDir, Actions.created);
+                }
+            }
+        }
+
+        private static void CheckForMoodifiedFiles()
+        {
+            List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
+            List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
+
+            foreach (var sourceFile in sourceFileList)
+            {
+                var backup = backupFileList.Find(backup => backup.IsFileModified(sourceFile.GetRelativeFilePath, sourceFile.GetMD5Code));
+                if (backup != null)
+                {
+                    EditFile(sourceFile, backup);
+                }
+            }
+        }
+
+        private static void EditFile(FileProps sourceFile, FileProps backupFile)
+        {
+            string fullBackupPath = backupFile.GetAbsoluteFilePath;
+            File.Delete(backupFile.GetAbsoluteFilePath);
+            File.Copy(sourceFile.GetAbsoluteFilePath, fullBackupPath);
+            Log(sourceFile.GetFileName, backupFile.GetAbsolutePath, Actions.edited);
+        }
+
+        private static void CheckForMovedFiles()
+        {
+            List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
+            List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
+
+            foreach (var sourceFile in sourceFileList)
+            {
+                var backup = backupFileList.Find(backup => backup.IsFileMoved(sourceFile.GetRelativeFilePath, sourceFile.GetMD5Code));
+                if (backup != null)
+                {
+                    MoveFile(sourceFile, backup);
+                }
+            }
+        }
+
+        private static void MoveFile(FileProps sourceFile, FileProps backupFile)
+        {
+            string newFile = Path.Combine(backupRoot, sourceFile.GetRelativeFilePath);
+            File.Move(backupFile.GetAbsoluteFilePath, newFile);
+            Log(sourceFile.GetFileName, newFile, Actions.moved);
+        }
+
+        private static void CheckForCopiesInSource()
+        {
+            List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
+            List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
+
+            foreach (var sourceFile in sourceFileList)
+            {
+                var matches = sourceFileList.Where(source => source.IsFileCopied(sourceFile.GetFileName, sourceFile.GetMD5Code, sourceFile.GetRelativePath)).ToList();
+                if (matches.Count > 0)
+                {
+                    foreach (var match in matches)
                     {
-                        var match = backupFileList.Find(backup => backup.IsFileTheSame(file.GetRelativeFilePath, file.GetMD5Code)); // See if the copy is already backed up
-                        if (match == null)
+                        var backup = backupFileList.Find(backup => backup.IsFileTheSame(match.GetRelativeFilePath, match.GetMD5Code));
+                        if (backup == null)
                         {
-                            CreateCopyFile(file, Actions.copied);
-                            continue;
+                            CopyFile(match);
                         }
                     }
                 }
-                var matchingBackupFile = backupFileList.Find(backup => backup.IsFileTheSame(file.GetRelativeFilePath, file.GetMD5Code));
-                if (matchingBackupFile == null) // if no match of the file is found, create a backup
-                {
-                    CreateCopyFile(file, Actions.created);
-                    continue;
-                }
             }
-
-            foreach (var file in backupFileList)
-            {
-                var matchingSourceFile = sourceFileList.Find(source => source.IsFileTheSame(file.GetRelativeFilePath, file.GetMD5Code));
-                if (matchingSourceFile == null) // the file was deleted
-                {
-                    File.Delete(file.GetAbsoluteFilePath);
-                    Log(file.GetFileName, file.GetAbsolutePath, Actions.deleted);
-                }
-            }
-
         }
 
-        private static void CreateCopyFile(FileProps file, Actions action)
+        private static void CopyFile(FileProps file)
         {
             string newFile = Path.Combine(backupRoot, file.GetRelativeFilePath);
             File.Copy(file.GetAbsoluteFilePath, newFile); // 
-            Log(file.GetFileName, newFile, action);
+            Log(file.GetFileName, newFile, Actions.copied);
         }
 
-        private static void EditFile(FileProps file, Actions action)
+        private static void CheckForMissingFiles()
         {
-            
+            List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
+            List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
+
+            foreach (var sourceFile in sourceFileList)
+            {
+                var backup = backupFileList.Find(backup => backup.IsFileTheSame(sourceFile.GetRelativeFilePath, sourceFile.GetMD5Code));
+                if (backup == null)
+                {
+                    CreateFile(sourceFile);
+                }
+            }
+        }
+        
+        private static void CreateFile(FileProps file)
+        {
+            string newFile = Path.Combine(backupRoot, file.GetRelativeFilePath);
+            File.Copy(file.GetAbsoluteFilePath, newFile); // 
+            Log(file.GetFileName, newFile, Actions.created);
+        }
+
+        private static void CheckForDeletedFiles()
+        {
+            List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
+            List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
+
+            foreach (var backupFile in backupFileList)
+            {
+                var source = sourceFileList.Find(source => source.IsFileTheSame(backupFile.GetRelativeFilePath, backupFile.GetMD5Code));
+                if (source == null)
+                {
+                    DeleteFile(backupFile);
+                }
+            }
+        }
+
+        private static void DeleteFile(FileProps file)
+        {
+            File.Delete(file.GetAbsoluteFilePath);
+            Log(file.GetFileName, file.GetAbsolutePath, Actions.deleted);
+        }
+
+        private static void CheckForDeletedDirs()
+        {
+            string[] sourceDirs = Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
+            string[] destDirs = Directory.GetDirectories(backupRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
+
+            for (int i = destDirs.Length - 1; i >= 0; --i)
+            {
+                string correspondingSourceDir = destDirs[i].Replace(backupRoot, sourceRoot);
+                if (!Directory.Exists(correspondingSourceDir))
+                {
+                    Directory.Delete(destDirs[i], true);
+                    Log(destDirs[i], Actions.deleted);
+                }
+            }
+        }
+
+        private static List<FileProps> GetAllFilesInDirectory(string root)
+        {
+            string[] files = Directory.GetFiles(root, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
+            return files.Select(file => new FileProps(file, root)).ToList();
         }
 
         enum Actions
