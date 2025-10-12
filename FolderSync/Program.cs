@@ -1,7 +1,4 @@
-﻿using System;
-using System.IO;
-using Microsoft.Extensions.Configuration;
-using System.Runtime.InteropServices;
+﻿using Microsoft.Extensions.Configuration;
 using System.Diagnostics.CodeAnalysis;
 
 namespace FolderSync
@@ -16,21 +13,29 @@ namespace FolderSync
         private static string backupRoot;
         [NotNull]
         private static string logFilePath;
-        
+
 
         public static void Main(string[] args)
         {
             IConfiguration config = new ConfigurationBuilder().AddCommandLine(args).Build();
             ParseArgs(config);
             InitalSync();
-            CheckForMissingDirs();
-            CheckForMoodifiedFiles();
-            CheckForMovedFiles();
-            CheckForCopiesInSource();
-            CheckForMissingFiles();
-            CheckForDeletedFiles();
-            CheckForDeletedDirs();
-            // Sync();
+            RunSync();
+        }
+        
+        private static void RunSync()
+        {
+            while (true)
+            {
+                CheckForMissingDirs();
+                CheckForMoodifiedFiles();
+                CheckForMovedFiles();
+                CheckForCopiesInSource();
+                CheckForMissingFiles();
+                CheckForDeletedFiles();
+                CheckForDeletedDirs();
+                System.Threading.Thread.Sleep(syncPeriod * 60000);
+            }
         }
 
         private static void ParseArgs(IConfiguration config)
@@ -131,7 +136,7 @@ namespace FolderSync
             File.Copy(sourceFile.GetAbsoluteFilePath, fullBackupPath);
             Log(sourceFile.GetFileName, backupFile.GetAbsolutePath, Actions.edited);
         }
-
+        // check for move is still not working properly
         private static void CheckForMovedFiles()
         {
             List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
