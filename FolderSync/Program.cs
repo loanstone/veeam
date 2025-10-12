@@ -72,20 +72,30 @@ namespace FolderSync
         {
             List<FileProps> sourceFileList = new List<FileProps>();
             List<FileProps> backupFileList = new List<FileProps>();
-            FileProps sourceProps;
-            FileProps backupProps;
+
+            string[] sourceDirs = Directory.GetDirectories(sourceFolder).OrderBy(s=>s).ToArray();
+            string[] destDirs = Directory.GetDirectories(destinationFolder).OrderBy(s => s).ToArray();
+            
+            if(sourceDirs != destDirs) // Make sure same directories exist. at the end of Sync() we're making sure to recursively delete directories that no longer exist in source.
+            {
+                
+            }
+
             string[] sourceFiles = Directory.GetFiles(sourceFolder, "*", SearchOption.AllDirectories);
             foreach (string file in sourceFiles)
-            {
-                sourceProps = new FileProps(file, sourceFolder);
-                sourceFileList.Add(sourceProps);
-            }
+                sourceFileList.Add(new FileProps(file, sourceFolder));
 
             string[] destFiles = Directory.GetFiles(destinationFolder, "*", SearchOption.AllDirectories);
             foreach (string file in destFiles)
+                backupFileList.Add(new FileProps(file, destinationFolder));
+
+            if(sourceFileList.Count == 0 && backupFileList.Count > 0) // If the source folder is empty, delete all files in the backup folder
             {
-                backupProps = new FileProps(file, destinationFolder);
-                backupFileList.Add(backupProps);
+                foreach (var file in backupFileList) 
+                {
+                    File.Delete(file.AbsoluteFilePath);
+                    Log(file.FileName, file.AbsolutePath, Actions.deleted);
+                }
             }
 
             foreach (var file in sourceFileList)
@@ -136,26 +146,6 @@ namespace FolderSync
                     }
                 }
             }
-        }
-        
-        private static string[] RemoveRoot(string[] fsCollection, ref string root)
-        {
-            for(int i = 0; i < fsCollection.Length; i++)
-            {
-                fsCollection[i] = fsCollection[i].Replace(root, "");
-            }
-            return fsCollection.OrderBy(s=>s).ToArray();
-        }
-
-        private static string RemoveRoot(string path, ref string root)
-        {
-            path = path.Replace(root, "");
-            return path;
-        }
-
-        private static bool IsSameMD5(string origin, string backup)
-        {
-            return String.Equals(origin, backup, StringComparison.OrdinalIgnoreCase);
         }
 
         enum Actions

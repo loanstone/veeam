@@ -30,12 +30,27 @@ namespace FolderSync
             }
         }
 
-        public string FileName => _fileName;
-        public string RootFolder => _root;
-        public string AbsoluteFilePath => _absoluteFilePath;
-        public string AbsolutePath => _absolutePath;
-        public string RelativeFilePath => _relativeFilePath;
-        public string RelativePath => _relativePath;
-        public string md5Code => _md5Code;
+        public string FileName => this._fileName;
+        public string RootFolder => this._root;
+        public string AbsoluteFilePath => this._absoluteFilePath;
+        public string AbsolutePath => this._absolutePath;
+        public string RelativeFilePath => this._relativeFilePath;
+        public string RelativePath => this._relativePath;
+        public string md5Code => this._md5Code;
+
+        public bool IsFileTheSame(string comparedToPath, string comparedToMD5)
+        {
+            return this.RelativeFilePath == comparedToPath && IsSameMD5(this.md5Code, comparedToMD5);
+        }
+
+        public bool IsFileCopied(string comparedToName, string comparedToMD5)
+        {
+            return this.FileName == comparedToName && IsSameMD5(this.md5Code, comparedToMD5);
+        }
+        
+        private static bool IsSameMD5(string origin, string backup)
+        {
+            return String.Equals(origin, backup, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }
