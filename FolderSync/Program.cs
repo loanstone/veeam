@@ -129,33 +129,6 @@ namespace FolderSync
                     Log(file.FileName, file.AbsolutePath, Actions.deleted);
                 }
             }
-
-            // foreach(var file in backupFileList)
-            // {
-            //     var matchingSourceByFile = sourceFileList.FindAll(source => source.RelativeFilePath == file.RelativeFilePath);
-            //     var matchingSourceByMD5 = sourceFileList.FindAll(source => source.md5Code == file.md5Code);
-
-            //     if (matchingSourceByFile.Count == 0 && matchingSourceByMD5.Count == 0) // the file was deleted
-            //     {
-            //         File.Delete(file.AbsoluteFilePath);
-            //         Log(file.FileName, file.AbsoluteFilePath, Actions.deleted);
-            //     }
-            //     else if (matchingSourceByMD5.Count > 1) // File was copied, maybe even renamed, but we're not checking for that - DOESN'T WORK
-            //     {
-            //         foreach(var sourceFile in matchingSourceByMD5)
-            //         {
-            //             string destinationDir = Path.Combine(destinationFolder, sourceFile.RelativePath);
-            //             string finalFile = Path.Combine(destinationDir, file.FileName);
-            //             if (!Directory.Exists(destinationDir))
-            //                 Directory.CreateDirectory(destinationDir);
-            //             if (!File.Exists(finalFile))
-            //             {
-            //                 File.Copy(sourceFile.AbsoluteFilePath, finalFile);
-            //                 Log(sourceFile.FileName, destinationDir, Actions.copied);
-            //             }
-            //         }
-            //     }
-            // }
         }
 
         enum Actions
