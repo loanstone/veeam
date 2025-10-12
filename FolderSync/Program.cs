@@ -25,11 +25,11 @@ namespace FolderSync
             InitalSync();
             CheckForMissingDirs();
             CheckForMoodifiedFiles();
+            CheckForMovedFiles();
             CheckForCopiesInSource();
             CheckForMissingFiles();
             CheckForDeletedFiles();
             CheckForDeletedDirs();
-            CheckForMovedFiles();
             // Sync();
         }
 
@@ -84,30 +84,10 @@ namespace FolderSync
         // Here we make sure that all required directories exist and clean the backup folder if the source is empty. We're not logging deletion here because it's not really a part of the actual file sync.
         private static void InitalSync()
         {
-            string[] sourceDirs = Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
-            string[] destDirs = Directory.GetDirectories(backupRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
-
-            foreach (var dir in sourceDirs) // Make sure the folders that are in the source are also in the backup
-            {
-                string backupDir = dir.Replace(sourceRoot, backupRoot);
-                if (!Directory.Exists(backupDir))
-                {
-                    Directory.CreateDirectory(backupDir);
-                    Log(backupDir, Actions.created);
-                }
-            }
-
-            if(Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories).Length == 0 && Directory.GetFiles(backupRoot, "*", SearchOption.AllDirectories).Length > 0)
-            {
-                foreach (var file in Directory.GetFiles(backupRoot, "*", SearchOption.AllDirectories))
-                    File.Delete(file);
-            }
-
-            if (sourceDirs.Length == 0 && destDirs.Length > 0) // If the source folder is empty, make sure the backup folder is empty as well
-            {
-                for (int i = destDirs.Length - 1; i >= 0; --i)
-                    Directory.Delete(destDirs[i]);
-            }
+            CheckForMissingDirs();
+            CheckForDeletedFiles();
+            CheckForDeletedDirs();
+            CheckForMissingFiles();
         }
 
         private static void CheckForMissingDirs()
@@ -160,7 +140,7 @@ namespace FolderSync
             foreach (var sourceFile in sourceFileList)
             {
                 var backup = backupFileList.Find(backup => backup.IsFileMoved(sourceFile.GetRelativeFilePath, sourceFile.GetMD5Code));
-                if (backup != null)
+                if (backup != null && !File.Exists(backup.GetAbsoluteFilePath))
                 {
                     MoveFile(sourceFile, backup);
                 }
