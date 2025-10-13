@@ -1,4 +1,4 @@
-Launch with the following arguments:
+Launch with the following arguments. Not that us of absolute paths is required:
 --syncPeriod "10"
 --source "/home/sampleSource"
 --dest "/home/sampleDest"

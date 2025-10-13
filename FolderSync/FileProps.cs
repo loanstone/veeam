@@ -21,12 +21,25 @@ namespace FolderSync
             _relativeFilePath = absoluteFilePath.Replace(root, "");
             _absolutePath = Path.GetDirectoryName(absoluteFilePath);
             _relativePath = _relativeFilePath.Replace(_fileName, "");
+            _md5Code = Calculatemd5(absoluteFilePath);
+            // using (var md5 = MD5.Create())
+            // {
+            //     using (var stream = File.OpenRead(_absoluteFilePath))
+            //     {
+            //         var hash = md5.ComputeHash(stream);
+            //         _md5Code = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+            //     }
+            // }
+        }
+
+        private string Calculatemd5(string absoluteFilePath)
+        {
             using (var md5 = MD5.Create())
             {
-                using (var stream = File.OpenRead(_absoluteFilePath))
+                using (var stream = File.OpenRead(absoluteFilePath))
                 {
                     var hash = md5.ComputeHash(stream);
-                    _md5Code = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+                    return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
                 }
             }
         }

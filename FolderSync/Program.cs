@@ -37,14 +37,14 @@ namespace FolderSync
             }
         }
 
-        private static void ParseArgs(IConfiguration config)
+        private static void ParseArgs(IConfiguration config) // ParseArgs needs to be redone into something testable
         {
             foreach (var kvp in config.AsEnumerable())
             {
                 switch (kvp.Key)
                 {
                     case "syncPeriod":
-                        if (!Int32.TryParse(kvp.Value, out int tempPeriod) && tempPeriod <= 0)
+                        if (!Int32.TryParse(kvp.Value, out int tempPeriod) || tempPeriod <= 0)
                         {
                             Console.WriteLine($"{kvp.Value} is not a valid integer for sync. Defaulting to 60 minutes.");
                             syncPeriod = 60;
@@ -56,13 +56,13 @@ namespace FolderSync
                         if (Directory.Exists(kvp.Value))
                             sourceRoot = kvp.Value;
                         else
-                            InvalidPath(kvp.Value);                    
+                            throw new ArgumentException($"Invalid argument: {kvp.Value}");                  
                         break;
                     case "destFolder":
                         if (Directory.Exists(kvp.Value))
                             backupRoot = kvp.Value;
                         else
-                            InvalidPath(kvp.Value);
+                            throw new ArgumentException($"Invalid argument: {kvp.Value}");
                         break;
                     case "log":
                         if (Directory.Exists(kvp.Value))
@@ -81,11 +81,12 @@ namespace FolderSync
         }
         private static void InvalidPath(string value)
         {
-            Console.WriteLine($"{value} is not a valid directory on your system");
-            Environment.Exit(0);
+            throw new ArgumentException($"Invalid argument: {value}");
+            // Console.WriteLine($"{value} is not a valid directory on your system");
+            // Environment.Exit(0);
         }
 
-        // Here we make sure that all required directories exist and clean the backup folder if the source is empty. We're not logging deletion here because it's not really a part of the actual file sync.
+        // Here we make sure that all required directories exist and clean the backup folder if the source is empty. 
         private static void InitalSync()
         {
             CheckForMissingDirs();
