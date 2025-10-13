@@ -28,8 +28,7 @@ namespace FolderSync
             while (true)
             {
                 CheckForMissingDirs();
-                CheckForMoodifiedFiles();
-                CheckForMovedFiles();
+                CheckForModifiedFiles();
                 CheckForCopiesInSource();
                 CheckForMissingFiles();
                 CheckForDeletedFiles();
@@ -114,14 +113,14 @@ namespace FolderSync
             }
         }
 
-        private static void CheckForMoodifiedFiles()
+        private static void CheckForModifiedFiles()
         {
             List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
             List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
 
             foreach (var sourceFile in sourceFileList)
             {
-                var backup = backupFileList.Find(backup => backup.IsFileModified(sourceFile.GetRelativeFilePath, sourceFile.GetMD5Code));
+                var backup = backupFileList.Find(backup => backup.IsFileModified(sourceFile));
                 if (backup != null)
                 {
                     EditFile(sourceFile, backup);
@@ -136,28 +135,6 @@ namespace FolderSync
             File.Copy(sourceFile.GetAbsoluteFilePath, fullBackupPath);
             Log(sourceFile.GetFileName, backupFile.GetAbsolutePath, Actions.edited);
         }
-        // check for move is still not working properly
-        private static void CheckForMovedFiles()
-        {
-            List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
-            List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
-
-            foreach (var sourceFile in sourceFileList)
-            {
-                var backup = backupFileList.Find(backup => backup.IsFileMoved(sourceFile.GetRelativeFilePath, sourceFile.GetMD5Code));
-                if (backup != null && !File.Exists(backup.GetAbsoluteFilePath))
-                {
-                    MoveFile(sourceFile, backup);
-                }
-            }
-        }
-
-        private static void MoveFile(FileProps sourceFile, FileProps backupFile)
-        {
-            string newFile = Path.Combine(backupRoot, sourceFile.GetRelativeFilePath);
-            File.Move(backupFile.GetAbsoluteFilePath, newFile);
-            Log(sourceFile.GetFileName, newFile, Actions.moved);
-        }
 
         private static void CheckForCopiesInSource()
         {
@@ -166,12 +143,12 @@ namespace FolderSync
 
             foreach (var sourceFile in sourceFileList)
             {
-                var matches = sourceFileList.Where(source => source.IsFileCopied(sourceFile.GetFileName, sourceFile.GetMD5Code, sourceFile.GetRelativePath)).ToList();
+                var matches = sourceFileList.Where(source => source.IsFileCopied(sourceFile)).ToList();
                 if (matches.Count > 0)
                 {
                     foreach (var match in matches)
                     {
-                        var backup = backupFileList.Find(backup => backup.IsFileTheSame(match.GetRelativeFilePath, match.GetMD5Code));
+                        var backup = backupFileList.Find(backup => backup.IsFileTheSame(match));
                         if (backup == null)
                         {
                             CopyFile(match);
@@ -195,7 +172,7 @@ namespace FolderSync
 
             foreach (var sourceFile in sourceFileList)
             {
-                var backup = backupFileList.Find(backup => backup.IsFileTheSame(sourceFile.GetRelativeFilePath, sourceFile.GetMD5Code));
+                var backup = backupFileList.Find(backup => backup.IsFileTheSame(sourceFile));
                 if (backup == null)
                 {
                     CreateFile(sourceFile);
@@ -217,7 +194,7 @@ namespace FolderSync
 
             foreach (var backupFile in backupFileList)
             {
-                var source = sourceFileList.Find(source => source.IsFileTheSame(backupFile.GetRelativeFilePath, backupFile.GetMD5Code));
+                var source = sourceFileList.Find(source => source.IsFileTheSame(backupFile));
                 if (source == null)
                 {
                     DeleteFile(backupFile);
@@ -284,7 +261,7 @@ namespace FolderSync
                 default:
                     break;
             }
-            string logTemplate = $"{dt} - {filename} was {action} {grammar} {fullDestinationName}";
+            string logTemplate = $"{dt} - {filename} was {action} {grammar} {Path.GetDirectoryName(fullDestinationName)}";
             Console.WriteLine(logTemplate);
 
             if (!Directory.Exists(Path.GetDirectoryName(logFilePath)))

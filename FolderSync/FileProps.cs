@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 namespace FolderSync
 {
@@ -38,24 +39,19 @@ namespace FolderSync
         public string GetRelativePath => this._relativePath;
         public string GetMD5Code => this._md5Code;
 
-        public bool IsFileTheSame(string comparedToPath, string comparedToMD5)
+        public bool IsFileTheSame(FileProps comparedToFile)
         {
-            return this.GetRelativeFilePath == comparedToPath && IsSameMD5(this.GetMD5Code, comparedToMD5);
+            return this.GetRelativeFilePath == comparedToFile.GetRelativeFilePath && IsSameMD5(this.GetMD5Code, comparedToFile.GetMD5Code);
         }
 
-        public bool IsFileCopied(string comparedToName, string comparedToMD5, string comparedToRelativePath)
+        public bool IsFileCopied(FileProps comparedToFile)
         {
-            return (this.GetFileName == comparedToName && IsSameMD5(this.GetMD5Code, comparedToMD5)) && this.GetRelativePath != comparedToRelativePath;
+            return (this.GetFileName == comparedToFile.GetFileName && IsSameMD5(this.GetMD5Code, comparedToFile.GetMD5Code)) && this.GetRelativePath != comparedToFile.GetRelativePath;
         }
 
-        public bool IsFileModified(string comparedToPath, string comparedToMD5)
+        public bool IsFileModified(FileProps comparedToFile)
         {
-            return this.GetRelativeFilePath == comparedToPath && !IsSameMD5(this.GetMD5Code, comparedToMD5);
-        }
-
-        public bool IsFileMoved(string comparedToPath, string comparedToMD5)
-        {
-            return this.GetRelativeFilePath != comparedToPath && IsSameMD5(this.GetMD5Code, comparedToMD5);
+            return this.GetRelativeFilePath == comparedToFile.GetRelativeFilePath && !IsSameMD5(this.GetMD5Code, comparedToFile.GetMD5Code);
         }
         
         private static bool IsSameMD5(string origin, string backup)
