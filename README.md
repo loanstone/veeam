@@ -1,6 +1,6 @@
-Launch with the following arguments. Note that us of absolute paths is required:
+Launch with the following arguments. Note that use of absolute paths is required:
 
-*--syncPeriod 10*
-*--source /home/sampleSource* or *--source C:\\sampleSource*
-*--dest /home/sampleDest* or *--dest C:\\sampleDest*
+<br>*--syncPeriod 10*</br>
+<br>*--source /home/sampleSource* or *--source C:\\sampleSource*</br>
+<br>*--dest /home/sampleDest* or *--dest C:\\sampleDest*</br>
 *--log /home/Log* or *--log C:\\LogFolder* &rarr; log is saved as *SyncLog_day-month-year hour:minute.log*
