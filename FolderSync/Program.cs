@@ -1,299 +1,109 @@
 ﻿using Microsoft.Extensions.Configuration;
-using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
 
 namespace FolderSync
 {
     public class FolderSync
     {
-        [NotNull]
-        private static int syncPeriod;
-        [NotNull]
-        private static string sourceRoot;
-        [NotNull]
-        private static string backupRoot;
-        [NotNull]
-        private static string logFilePath;
-
-
         public static void Main(string[] args)
         {
+            Process[] processes = Process.GetProcesses();
+            foreach(var process in processes) // Just to make sure only one instance of FolderSync is running
+            {
+                if(process.ProcessName == "FolderSync")
+                {
+                    Console.WriteLine("Another instance of FolderSync is already running. No need to run another.");
+                    return;
+                }
+            }
+
             IConfiguration config = new ConfigurationBuilder().AddCommandLine(args).Build();
-            ParseArgs(config);
-            InitalSync();
-            RunSync();
+            Config configuration = ParseArgs(config);
+            var syncLogic = new SyncLogic(configuration);
+            syncLogic.RunInitialSync();
+            syncLogic.RunSyncLoop();
         }
-        
-        private static void RunSync()
+
+        private static int CheckSyncPeriod(string? period)
         {
-            while (true)
+            if (!Int32.TryParse(period, out int tempPeriod) || tempPeriod <= 0)
             {
-                CheckForMissingDirs();
-                CheckForModifiedFiles();
-                CheckForCopiesInSource();
-                CheckForMissingFiles();
-                CheckForDeletedFiles();
-                CheckForDeletedDirs();
-                System.Threading.Thread.Sleep(syncPeriod * 60000);
+                Console.WriteLine($"{period} is not a valid integer for sync. Defaulting to 60 minutes.");
+                return 60;
+            }
+            return tempPeriod;
+        }
+
+        private static string CheckPath(string? path)
+        {
+            if (Directory.Exists(path))
+                return path;
+            return null;
+        }
+
+        private static string CheckLogFilePath(string? filePath)
+        {
+            string logFileName = $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log";
+            if (Directory.Exists(filePath))
+                return Path.Combine(filePath, logFileName);
+            else
+            {
+                Console.WriteLine($"The directory {filePath} does not exist, defaulting to {Path.Combine(Directory.GetCurrentDirectory(), "Log.log")}");
+                return Path.Combine(Directory.GetCurrentDirectory(), logFileName);
             }
         }
 
-        private static void ParseArgs(IConfiguration config) // ParseArgs needs to be redone into something testable
+        private static bool IsPathAbsolute(string? path)
         {
-            foreach (var kvp in config.AsEnumerable())
+            return Path.IsPathRooted(path);
+        }
+
+        private static bool ArePathsNested(string source, string dest)
+        {
+            return source.StartsWith(dest) || dest.StartsWith(source);
+        }
+
+        private static void CreateLogFile(string path)
+        {
+            if(!File.Exists(path))
+                File.Create(path).Dispose();
+        }
+
+        private static Config ParseArgs(IConfiguration config) // ParseArgs needs to be redone into something testable. I NEED TO FIGURE OUT HOW TO PREVENT NESTING OF SOURCE AND BAcKUP ROOTS
+        {
+            Config folderSyncConfig = new Config();
+            folderSyncConfig.SyncPeriod = CheckSyncPeriod(config["syncPeriod"]);
+
+            if(string.IsNullOrEmpty(config["sourceFolder"]) || string.IsNullOrEmpty(config["destFolder"]))
+                throw new ArgumentException("Source and backup folder arguments are required");
+
+            string? source = IsPathAbsolute(config["sourceFolder"]) ? CheckPath(config["sourceFolder"]) : null;
+            string? dest = IsPathAbsolute(config["destFolder"]) ? CheckPath(config["destFolder"]) : null;
+            string? log = IsPathAbsolute(config["log"]) ? CheckLogFilePath(config["log"]) : null;
+
+            if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(dest))
+                throw new ArgumentException("Argument for source or destination folder is either empty or not a valid directory on your system");
+                
+            source = !ArePathsNested(source, dest) ? config["sourceFolder"] : throw new ArgumentException("The source and backup folders cannot be nested within each other");
+            dest = !ArePathsNested(source, dest) ? config["destFolder"] : throw new ArgumentException("The source and backup folders cannot be nested within each other");
+
+            folderSyncConfig.SourceFolder = source;
+            folderSyncConfig.BackupFolder = dest;
+
+            string logFileName = $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log";
+            if (string.IsNullOrEmpty(log))
             {
-                switch (kvp.Key)
-                {
-                    case "syncPeriod":
-                        if (!Int32.TryParse(kvp.Value, out int tempPeriod) || tempPeriod <= 0)
-                        {
-                            Console.WriteLine($"{kvp.Value} is not a valid integer for sync. Defaulting to 60 minutes.");
-                            syncPeriod = 60;
-                        }
-                        else
-                            syncPeriod = tempPeriod;
-                        break;
-                    case "sourceFolder":
-                        if (Directory.Exists(kvp.Value))
-                            sourceRoot = kvp.Value;
-                        else
-                            throw new ArgumentException($"Invalid argument: {kvp.Value}");                  
-                        break;
-                    case "destFolder":
-                        if (Directory.Exists(kvp.Value))
-                            backupRoot = kvp.Value;
-                        else
-                            throw new ArgumentException($"Invalid argument: {kvp.Value}");
-                        break;
-                    case "log":
-                        if (Directory.Exists(kvp.Value))
-                            logFilePath = Path.Combine(kvp.Value, $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log");
-                        else
-                        {
-                            Console.WriteLine($"The directory {kvp.Value} does not exist, defaulting to {Path.Combine(Directory.GetCurrentDirectory(), "Log.log")}");
-                            logFilePath = Path.Combine(Directory.GetCurrentDirectory(), $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log");
-                        }
-                        break;
-                    default:
-                        Console.WriteLine($"{kvp.Key} is not a supported argument");
-                        break;
-                }
+                CreateLogFile(Path.Combine(Directory.GetCurrentDirectory(), logFileName));
+                folderSyncConfig.LogFilePath = Path.Combine(Directory.GetCurrentDirectory(), logFileName);
             }
-        }
-        private static void InvalidPath(string value)
-        {
-            throw new ArgumentException($"Invalid argument: {value}");
-            // Console.WriteLine($"{value} is not a valid directory on your system");
-            // Environment.Exit(0);
-        }
-
-        // Here we make sure that all required directories exist and clean the backup folder if the source is empty. 
-        private static void InitalSync()
-        {
-            CheckForMissingDirs();
-            CheckForDeletedFiles();
-            CheckForDeletedDirs();
-            CheckForMissingFiles();
-        }
-
-        private static void CheckForMissingDirs()
-        {
-            string[] sourceDirs = Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
-            string[] destDirs = Directory.GetDirectories(backupRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
-
-            if (sourceDirs == destDirs)
-                return;
-
-            foreach (var dir in sourceDirs) // Make sure the folders that are in the source are also in the backup
+            else
             {
-                string backupDir = dir.Replace(sourceRoot, backupRoot);
-                if (!Directory.Exists(backupDir))
-                {
-                    Directory.CreateDirectory(backupDir);
-                    Log(backupDir, Actions.created);
-                }
-            }
-        }
-
-        private static void CheckForModifiedFiles()
-        {
-            List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
-            List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
-
-            foreach (var sourceFile in sourceFileList)
-            {
-                var backup = backupFileList.Find(backup => backup.IsFileModified(sourceFile));
-                if (backup != null)
-                {
-                    EditFile(sourceFile, backup);
-                }
-            }
-        }
-
-        private static void EditFile(FileProps sourceFile, FileProps backupFile)
-        {
-            string fullBackupPath = backupFile.GetAbsoluteFilePath;
-            File.Delete(backupFile.GetAbsoluteFilePath);
-            File.Copy(sourceFile.GetAbsoluteFilePath, fullBackupPath);
-            Log(sourceFile.GetFileName, backupFile.GetAbsolutePath, Actions.edited);
-        }
-
-        private static void CheckForCopiesInSource()
-        {
-            List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
-            List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
-
-            foreach (var sourceFile in sourceFileList)
-            {
-                var matches = sourceFileList.Where(source => source.IsFileCopied(sourceFile)).ToList();
-                if (matches.Count > 0)
-                {
-                    foreach (var match in matches)
-                    {
-                        var backup = backupFileList.Find(backup => backup.IsFileTheSame(match));
-                        if (backup == null)
-                        {
-                            CopyFile(match);
-                        }
-                    }
-                }
-            }
-        }
-
-        private static void CopyFile(FileProps file)
-        {
-            string newFile = Path.Combine(backupRoot, file.GetRelativeFilePath);
-            File.Copy(file.GetAbsoluteFilePath, newFile); // 
-            Log(file.GetFileName, newFile, Actions.copied);
-        }
-
-        private static void CheckForMissingFiles()
-        {
-            List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
-            List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
-
-            foreach (var sourceFile in sourceFileList)
-            {
-                var backup = backupFileList.Find(backup => backup.IsFileTheSame(sourceFile));
-                if (backup == null)
-                {
-                    CreateFile(sourceFile);
-                }
-            }
-        }
-        
-        private static void CreateFile(FileProps file)
-        {
-            string newFile = Path.Combine(backupRoot, file.GetRelativeFilePath);
-            File.Copy(file.GetAbsoluteFilePath, newFile); // 
-            Log(file.GetFileName, newFile, Actions.created);
-        }
-
-        private static void CheckForDeletedFiles()
-        {
-            List<FileProps> sourceFileList = GetAllFilesInDirectory(sourceRoot);
-            List<FileProps> backupFileList = GetAllFilesInDirectory(backupRoot);
-
-            foreach (var backupFile in backupFileList)
-            {
-                var source = sourceFileList.Find(source => source.IsFileTheSame(backupFile));
-                if (source == null)
-                {
-                    DeleteFile(backupFile);
-                }
-            }
-        }
-
-        private static void DeleteFile(FileProps file)
-        {
-            File.Delete(file.GetAbsoluteFilePath);
-            Log(file.GetFileName, file.GetAbsolutePath, Actions.deleted);
-        }
-
-        private static void CheckForDeletedDirs()
-        {
-            string[] sourceDirs = Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
-            string[] destDirs = Directory.GetDirectories(backupRoot, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
-
-            for (int i = destDirs.Length - 1; i >= 0; --i)
-            {
-                string correspondingSourceDir = destDirs[i].Replace(backupRoot, sourceRoot);
-                if (!Directory.Exists(correspondingSourceDir))
-                {
-                    Directory.Delete(destDirs[i], true);
-                    Log(destDirs[i], Actions.deleted);
-                }
-            }
-        }
-
-        private static List<FileProps> GetAllFilesInDirectory(string root)
-        {
-            string[] files = Directory.GetFiles(root, "*", SearchOption.AllDirectories).OrderBy(s => s).ToArray();
-            return files.Select(file => new FileProps(file, root)).ToList();
-        }
-
-        enum Actions
-        {
-            created,
-            deleted,
-            copied,
-            renamed,
-            moved,
-            edited
-        }
-
-        private static void Log(string filename, string fullDestinationName, Actions action)
-        {
-            string dt = DateTime.Now.ToString("dd-MM-yyyy HH:mm");
-            string grammar = "";
-            switch (action)
-            {
-                case Actions.created:
-                case Actions.edited:
-                    grammar = "in";
-                    break;
-                case Actions.deleted:
-                    grammar = "from";
-                    break;
-                case Actions.copied:
-                case Actions.renamed:
-                case Actions.moved:
-                    grammar = "to";
-                    break;
-                default:
-                    break;
-            }
-            string logTemplate = $"{dt} - {filename} was {action} {grammar} {Path.GetDirectoryName(fullDestinationName)}";
-            Console.WriteLine(logTemplate);
-
-            if (!Directory.Exists(Path.GetDirectoryName(logFilePath)))
-                Directory.CreateDirectory(Path.GetDirectoryName(logFilePath));
-
-            if (!File.Exists(logFilePath))
-                File.Create(logFilePath).Dispose();
-
-            using (var logFile = File.AppendText(logFilePath))
-            {
-                logFile.WriteLine(logTemplate);
+                CreateLogFile(log);
+                folderSyncConfig.LogFilePath = log;
             }
 
-        }
+            return folderSyncConfig;
 
-        private static void Log(string dir, Actions action)
-        {
-            string dt = DateTime.Now.ToString("dd-MM-yyyy HH:mm");
-            string logTemplate = $"{dt} - Directory {dir} was {action}";
-            Console.WriteLine(logTemplate);
-
-            if (!Directory.Exists(Path.GetDirectoryName(logFilePath)))
-                Directory.CreateDirectory(Path.GetDirectoryName(logFilePath));
-
-            if (!File.Exists(logFilePath))
-                File.Create(logFilePath).Dispose();
-
-            using (var logFile = File.AppendText(logFilePath))
-            {
-                logFile.WriteLine(logTemplate);
-            }
         }
     }
 }

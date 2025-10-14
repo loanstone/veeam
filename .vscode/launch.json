@@ -7,7 +7,7 @@
             "request": "launch",
             "preLaunchTask": "dotnet: build",
             "program": "${workspaceFolder}/FolderSync/bin/Debug/net8.0/FolderSync.dll",
-            "args": ["--syncPeriod=20", "1", "--sourceFolder", "/home/loanstone/veeam SyncFolders/SourceFolder/", "--destFolder", "../", "--log", "/home/loanstone/veeam SyncFolders/Logs/"],
+            "args": ["--syncPeriod=20", "1", "--sourceFolder", "/home/loanstone/veeam SyncFolders/SourceFolder/", "--destFolder", "/home/loanstone/veeam SyncFolders/BackupFolder/", "--log", "/home/loanstone/veeam SyncFolders/Logs/"],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false
         }

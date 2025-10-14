@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 
 namespace FolderSync
 {
@@ -18,25 +17,17 @@ namespace FolderSync
             _fileName = Path.GetFileName(absoluteFilePath);
             _root = root;
             _absoluteFilePath = absoluteFilePath;
-            _relativeFilePath = absoluteFilePath.Replace(root, "");
+            _relativeFilePath = Path.GetRelativePath(root, absoluteFilePath);
             _absolutePath = Path.GetDirectoryName(absoluteFilePath);
-            _relativePath = _relativeFilePath.Replace(_fileName, "");
-            _md5Code = Calculatemd5(absoluteFilePath);
-            // using (var md5 = MD5.Create())
-            // {
-            //     using (var stream = File.OpenRead(_absoluteFilePath))
-            //     {
-            //         var hash = md5.ComputeHash(stream);
-            //         _md5Code = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-            //     }
-            // }
+            _relativePath = Path.GetDirectoryName(_relativeFilePath);
+            _md5Code = Calculatemd5();
         }
 
-        private string Calculatemd5(string absoluteFilePath)
+        private string Calculatemd5()
         {
             using (var md5 = MD5.Create())
             {
-                using (var stream = File.OpenRead(absoluteFilePath))
+                using (var stream = File.OpenRead(this._absoluteFilePath))
                 {
                     var hash = md5.ComputeHash(stream);
                     return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();

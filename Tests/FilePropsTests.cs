@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using FolderSync;
 
 namespace Tests
 {
@@ -40,8 +39,8 @@ namespace Tests
             Assert.Equal(sourceRoot, file.GetRootFolder);
             Assert.Equal(testFilePath, file.GetAbsoluteFilePath);
             Assert.Equal(sourceRoot, file.GetAbsolutePath);
-            Assert.Equal(Path.Combine(Path.DirectorySeparatorChar.ToString(), "SampleFile.txt"), file.GetRelativeFilePath);
-            Assert.Equal(Path.DirectorySeparatorChar.ToString(), file.GetRelativePath);
+            Assert.Equal(Path.Combine(Path.GetRelativePath(sourceRoot, testFilePath)), file.GetRelativeFilePath);
+            Assert.Equal(Path.GetDirectoryName(Path.GetRelativePath(sourceRoot, testFilePath)), file.GetRelativePath);
             string expectedMd5 = CalculateMd5(testFilePath);
             Assert.Equal(expectedMd5, file.GetMD5Code);
 

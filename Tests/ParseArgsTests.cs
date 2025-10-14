@@ -1,149 +1,202 @@
-using System;
-using System.Collections.Generic;
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
-using Xunit;
-using FolderSync;
 
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
 namespace Tests
 {
     public class ParseArgsTests
     {
-        [Theory]
-        [InlineData("--badSyncArgName")]
-        [InlineData("- syncPeriod")]
-        [InlineData("/SyncPeriod=")]
-        [InlineData("SyncPeriod", "1")]
-        [InlineData("--SyncPeriod", "1")]
-        public void SetSyncPeriodArgument_Fails(params string[] args)
+        [Fact]
+        public void TestValidArguments_Succeeds()
         {
-            IConfiguration arguments = new ConfigurationBuilder().AddCommandLine(args).Build();
+            string period = "15";
+            string sourceFolder = Path.Combine(Path.GetTempPath(), "SourceFolder");
+            string destFolder = Path.Combine(Path.GetTempPath(), "BackupFolder");
+            string logFolder = Path.Combine(Path.GetTempPath(), "Logs");
+            if (!Directory.Exists(sourceFolder))
+                Directory.CreateDirectory(sourceFolder);
+            if (!Directory.Exists(destFolder))
+                Directory.CreateDirectory(destFolder);
+            if (!Directory.Exists(logFolder))
+                Directory.CreateDirectory(logFolder);
+            Assert.True(Directory.Exists(sourceFolder));
+            Assert.True(Directory.Exists(destFolder));
 
-            var type = typeof(FolderSync.FolderSync);
-            var method = type.GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            var syncPeriodField = type.GetField("syncPeriod", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            method.Invoke(null, new object[] { arguments });
-            Assert.Equal(0, syncPeriodField.GetValue(null));
-        }
+            string[] args = new string[] { "--syncPeriod", period, "--sourceFolder", sourceFolder, "--destFolder", destFolder, "--log", logFolder };
+            IConfiguration cmdArgs = new ConfigurationBuilder().AddCommandLine(args).Build();
+            var parseArgs = typeof(FolderSync.FolderSync).GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Config config = (Config)parseArgs.Invoke(null, new object[] { cmdArgs });
 
-        [Theory]
-        [InlineData("--syncPeriod", "1")]
-        [InlineData("--syncPeriod=", "10")]
-        [InlineData("--syncPeriod=15", "1")]
-        public void SetSyncArgumentValue_Succeeds(params string[] args)
-        {
-            IConfiguration arguments = new ConfigurationBuilder().AddCommandLine(args).Build();
+            Assert.Equal(Int32.Parse(period), config.SyncPeriod);
+            Assert.Equal(sourceFolder, config.SourceFolder);
+            Assert.Equal(destFolder, config.BackupFolder);
+            Assert.Equal(Path.Combine(logFolder, $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log"), config.LogFilePath);
 
-            var type = typeof(FolderSync.FolderSync);
-            var method = type.GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            var syncPeriodField = type.GetField("syncPeriod", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            method.Invoke(null, new object[] { arguments });
-            Assert.InRange((int)syncPeriodField.GetValue(null), 1, int.MaxValue);
-        }
-
-        [Theory]
-        [InlineData("--syncPeriod", "")]
-        [InlineData("--syncPeriod", " ")]
-        [InlineData("--syncPeriod", "abc")]
-        [InlineData("--syncPeriod", "-1")]
-        [InlineData("--syncPeriod", "0")]
-        [InlineData("--syncPeriod", "1.5")]
-        [InlineData("--syncPeriod", "1.0")]
-        [InlineData("--syncPeriod", "1,0")]
-        [InlineData("--syncPeriod=0", "2")]
-        [InlineData("--syncPeriod=", "0")]
-        
-        public void SetSyncArgumentValue_DefaultsToSixty(params string[] args)
-        {
-            IConfiguration arguments = new ConfigurationBuilder().AddCommandLine(args).Build();
-
-            var type = typeof(FolderSync.FolderSync);
-            var method = type.GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            var syncPeriodField = type.GetField("syncPeriod", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            method.Invoke(null, new object[] { arguments });
-            Assert.Equal(60, syncPeriodField.GetValue(null));
-        }
-
-        [Theory]
-        [InlineData("--badSourceRootArgName")]
-        [InlineData("- sourceRoot")]
-        [InlineData("/sourceRoot=")]
-        [InlineData("sourceRoot", "")]
-        [InlineData("sourceRoot", "/tmp/NonExistentFolder")]
-        [InlineData("sourceRoot", "C:\\ThisFolderShouldNotExist")]
-        [InlineData("--sourceRoot", "Invalid<>Path|Name")]
-        [InlineData("--sourceRoot", "/")]
-        [InlineData("--sourceRoot", "../")]
-        public void SetSourceRootArgument_Fails(params string[] args)
-        {
-            IConfiguration arguments = new ConfigurationBuilder().AddCommandLine(args).Build();
-
-            var type = typeof(FolderSync.FolderSync);
-            var method = type.GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            var sourceRootField = type.GetField("sourceRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            method.Invoke(null, new object[] { arguments });
-            Assert.Null(sourceRootField.GetValue(null));
+            Directory.Delete(sourceFolder, true);
+            Directory.Delete(destFolder, true);
+            Directory.Delete(logFolder, true);
         }
 
         [Fact]
-        public void SetSourceRootArgument_Succeeds()
+        public void TestInvalidPeriod_DefaultsTo60()
         {
-            string tempPath = Path.GetTempPath();
-            Directory.CreateDirectory(Path.Combine(tempPath, "TestSourceRoot"));
-            string testSourcePath = Path.Combine(tempPath, "TestSourceRoot");
-            Assert.True(Directory.Exists(testSourcePath));
-            IConfiguration arguments = new ConfigurationBuilder().AddCommandLine(new string[] { "--sourceFolder", testSourcePath }).Build();
+            string period = "-5";
+            string sourceFolder = Path.Combine(Path.GetTempPath(), "SourceFolder");
+            string destFolder = Path.Combine(Path.GetTempPath(), "BackupFolder");
+            string logFolder = Path.Combine(Path.GetTempPath(), "Logs");
+            if (!Directory.Exists(sourceFolder))
+                Directory.CreateDirectory(sourceFolder);
+            if (!Directory.Exists(destFolder))
+                Directory.CreateDirectory(destFolder);
+            if (!Directory.Exists(logFolder))
+                Directory.CreateDirectory(logFolder);
+            Assert.True(Directory.Exists(sourceFolder));
+            Assert.True(Directory.Exists(destFolder));
 
-            var type = typeof(FolderSync.FolderSync);
-            var method = type.GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            var sourceRootField = type.GetField("sourceRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            method.Invoke(null, new object[] { arguments });
-            Assert.Equal(testSourcePath, sourceRootField.GetValue(null));
+            string[] args = new string[] { "--syncPeriod", period, "--sourceFolder", sourceFolder, "--destFolder", destFolder, "--log", logFolder };
+            IConfiguration cmdArgs = new ConfigurationBuilder().AddCommandLine(args).Build();
+            var parseArgs = typeof(FolderSync.FolderSync).GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Config config = (Config)parseArgs.Invoke(null, new object[] { cmdArgs });
 
-            Assert.True(Directory.Exists(testSourcePath));
-            Directory.Delete(testSourcePath, true);
-            Assert.False(Directory.Exists(testSourcePath));
-        }
+            Assert.Equal(60, config.SyncPeriod);
+            Assert.Equal(sourceFolder, config.SourceFolder);
+            Assert.Equal(destFolder, config.BackupFolder);
+            Assert.Equal(Path.Combine(logFolder, $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log"), config.LogFilePath);
 
-        [Theory]
-        [InlineData("--badBackupRootArgName")]
-        [InlineData("- destFolder")]
-        [InlineData("/destFolder=")]
-        [InlineData("destFolder", "")]
-        [InlineData("destFolder", "/tmp/NonExistentFolder")]
-        [InlineData("destFolder", "C:\\ThisFolderShouldNotExist")]
-        [InlineData("--destFolder", "Invalid<>Path|Name")]
-        [InlineData("--destFolder", "/")]
-        [InlineData("--destFolder", "../")]
-        public void SetBackupRootArgument_Fails(params string[] args)
-        {
-            IConfiguration arguments = new ConfigurationBuilder().AddCommandLine(args).Build();
-
-            var type = typeof(FolderSync.FolderSync);
-            var method = type.GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            var backupRootField = type.GetField("backupRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            var exceptions = Record.Exception(() => method.Invoke(null, new object[] { arguments }));
-            Assert.NotNull(exceptions);
-            Assert.Null(backupRootField.GetValue(null));
+            Directory.Delete(sourceFolder, true);
+            Directory.Delete(destFolder, true);
+            Directory.Delete(logFolder, true);
         }
 
         [Fact]
-        public void SetBackupRootArgument_Succeeds()
+        public void TestMissingSourceFolder_Fails()
         {
-            string tempPath = Path.GetTempPath();
-            Directory.CreateDirectory(Path.Combine(tempPath, "TestSourceRoot"));
-            string testBackupPath = Path.Combine(tempPath, "TestSourceRoot");
-            Assert.True(Directory.Exists(testBackupPath));
-            IConfiguration arguments = new ConfigurationBuilder().AddCommandLine(new string[] { "--sourceFolder", testBackupPath }).Build();
+            string period = "15";
+            string destFolder = Path.Combine(Path.GetTempPath(), "BackupFolder");
+            string logFolder = Path.Combine(Path.GetTempPath(), "Logs");
+            if (!Directory.Exists(destFolder))
+                Directory.CreateDirectory(destFolder);
+            if (!Directory.Exists(logFolder))
+                Directory.CreateDirectory(logFolder);
+            Assert.True(Directory.Exists(destFolder));
 
-            var type = typeof(FolderSync.FolderSync);
-            var method = type.GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            var sourceRootField = type.GetField("sourceRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            method.Invoke(null, new object[] { arguments });
-            Assert.Equal(testBackupPath, sourceRootField.GetValue(null));
+            string[] args = new string[] { "--syncPeriod", period, "--destFolder", destFolder, "--log", logFolder };
+            IConfiguration cmdArgs = new ConfigurationBuilder().AddCommandLine(args).Build();
+            var parseArgs = typeof(FolderSync.FolderSync).GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            var ex = Assert.Throws<TargetInvocationException>(() => parseArgs.Invoke(null, new object[] { cmdArgs }));
+            Assert.IsType<ArgumentException>(ex.InnerException);
 
-            Assert.True(Directory.Exists(testBackupPath));
-            Directory.Delete(testBackupPath, true);
-            Assert.False(Directory.Exists(testBackupPath));
+            Directory.Delete(destFolder, true);
+            Directory.Delete(logFolder, true);
+        }
+
+        [Fact]
+        public void TestMissingBackupFolder_Fails()
+        {
+            string period = "15";
+            string sourceFolder = Path.Combine(Path.GetTempPath(), "SourceFolder");
+            string logFolder = Path.Combine(Path.GetTempPath(), "Logs");
+            if (!Directory.Exists(sourceFolder))
+                Directory.CreateDirectory(sourceFolder);
+            if (!Directory.Exists(logFolder))
+                Directory.CreateDirectory(logFolder);
+            Assert.True(Directory.Exists(sourceFolder));
+
+            string[] args = new string[] { "--syncPeriod", period, "--sourceFolder", sourceFolder, "--log", logFolder };
+            IConfiguration cmdArgs = new ConfigurationBuilder().AddCommandLine(args).Build();
+            var parseArgs = typeof(FolderSync.FolderSync).GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            var ex = Assert.Throws<TargetInvocationException>(() => parseArgs.Invoke(null, new object[] { cmdArgs }));
+            Assert.IsType<ArgumentException>(ex.InnerException);
+
+            Directory.Delete(sourceFolder, true);
+            Directory.Delete(logFolder, true);
+        }
+
+        [Fact]
+        public void TestNestedPaths_Fails()
+        {
+            string period = "15";
+            string sourceFolder = Path.Combine(Path.GetTempPath(), "SourceFolder");
+            string destFolder = Path.Combine(sourceFolder, "BackupFolder");
+            string logFolder = Path.Combine(Path.GetTempPath(), "Logs");
+            if (!Directory.Exists(sourceFolder))
+                Directory.CreateDirectory(sourceFolder);
+            if (!Directory.Exists(logFolder))
+                Directory.CreateDirectory(logFolder);
+            Assert.True(Directory.Exists(sourceFolder));
+
+            string[] args = new string[] { "--syncPeriod", period, "--sourceFolder", sourceFolder, "--destFolder", destFolder, "--log", logFolder };
+            IConfiguration cmdArgs = new ConfigurationBuilder().AddCommandLine(args).Build();
+            var parseArgs = typeof(FolderSync.FolderSync).GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            var ex = Assert.Throws<TargetInvocationException>(() => parseArgs.Invoke(null, new object[] { cmdArgs }));
+            Assert.IsType<ArgumentException>(ex.InnerException);
+
+            Directory.Delete(sourceFolder, true);
+            Directory.Delete(logFolder, true);
+        }
+
+        [Fact]
+        public void TestInvalidLogPath_DefaultsToCurrentDirectory()
+        {
+            string period = "15";
+            string sourceFolder = Path.Combine(Path.GetTempPath(), "SourceFolder");
+            string destFolder = Path.Combine(Path.GetTempPath(), "BackupFolder");
+            string logFolder = Path.Combine(Path.GetTempPath(), "NonExistentLogs");
+            if (!Directory.Exists(sourceFolder))
+                Directory.CreateDirectory(sourceFolder);
+            if (!Directory.Exists(destFolder))
+                Directory.CreateDirectory(destFolder);
+            Assert.True(Directory.Exists(sourceFolder));
+            Assert.True(Directory.Exists(destFolder));
+
+            string[] args = new string[] { "--syncPeriod", period, "--sourceFolder", sourceFolder, "--destFolder", destFolder, "--log", logFolder };
+            IConfiguration cmdArgs = new ConfigurationBuilder().AddCommandLine(args).Build();
+            var parseArgs = typeof(FolderSync.FolderSync).GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Config config = (Config)parseArgs.Invoke(null, new object[] { cmdArgs });
+
+            Assert.Equal(Int32.Parse(period), config.SyncPeriod);
+            Assert.Equal(sourceFolder, config.SourceFolder);
+            Assert.Equal(destFolder, config.BackupFolder);
+            Assert.Equal(Path.Combine(Directory.GetCurrentDirectory(), $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log"), config.LogFilePath);
+
+            Directory.Delete(sourceFolder, true);
+            Directory.Delete(destFolder, true);
+        }
+
+        [Fact]
+        public void TestMissingLogPath_DefaultsToCurrentDirectory()
+        {
+            string period = "15";
+            string sourceFolder = Path.Combine(Path.GetTempPath(), "SourceFolder");
+            string destFolder = Path.Combine(Path.GetTempPath(), "BackupFolder");
+            if (!Directory.Exists(sourceFolder))
+                Directory.CreateDirectory(sourceFolder);
+            if (!Directory.Exists(destFolder))
+                Directory.CreateDirectory(destFolder);
+            Assert.True(Directory.Exists(sourceFolder));
+            Assert.True(Directory.Exists(destFolder));
+
+            string[] args = new string[] { "--syncPeriod", period, "--sourceFolder", sourceFolder, "--destFolder", destFolder };
+            IConfiguration cmdArgs = new ConfigurationBuilder().AddCommandLine(args).Build();
+            var parseArgs = typeof(FolderSync.FolderSync).GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Config config = (Config)parseArgs.Invoke(null, new object[] { cmdArgs });
+
+            Assert.Equal(Int32.Parse(period), config.SyncPeriod);
+            Assert.Equal(sourceFolder, config.SourceFolder);
+            Assert.Equal(destFolder, config.BackupFolder);
+            Assert.Equal(Path.Combine(Directory.GetCurrentDirectory(), $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log"), config.LogFilePath);
+
+            Directory.Delete(sourceFolder, true);
+            Directory.Delete(destFolder, true);
+        }
+
+        [Fact]
+        public void TestNoArguments_Fails()
+        {
+            string[] args = Array.Empty<string>();
+            IConfiguration cmdArgs = new ConfigurationBuilder().AddCommandLine(args).Build();
+            var parseArgs = typeof(FolderSync.FolderSync).GetMethod("ParseArgs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.Throws<TargetInvocationException>(() => parseArgs.Invoke(null, new object[] { cmdArgs }));
         }
     }
 }
