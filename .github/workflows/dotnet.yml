@@ -8,8 +8,6 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-    tags:
-      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -40,39 +38,3 @@ jobs:
       run: dotnet build --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
-    - name: Publish for ${{ matrix.rid }}
-      run: dotnet publish -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:UseAppHost=true -p:PublishTrimmed=true -o ./publish/${{ matrix.rid }}
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: FolderSync-${{ matrix.rid }}
-        path: ./publish/${{ matrix.rid }}
-
-  release:
-    name: Create release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: build-${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: ./artifacts/**
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
