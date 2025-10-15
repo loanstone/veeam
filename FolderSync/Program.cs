@@ -43,13 +43,12 @@ namespace FolderSync
 
         private static string CheckLogFilePath(string? filePath)
         {
-            string logFileName = $"SyncLog_{DateTime.Now.ToString("dd-MM-yyyy")}.log";
             if (Directory.Exists(filePath))
-                return Path.Combine(filePath, logFileName);
+                return filePath;
             else
             {
-                Console.WriteLine($"The directory {filePath} does not exist, defaulting to {Path.Combine(Directory.GetCurrentDirectory(), "Log.log")}");
-                return Path.Combine(Directory.GetCurrentDirectory(), logFileName);
+                Console.WriteLine($"The directory {filePath} does not exist, defaulting to {Path.Combine(Directory.GetCurrentDirectory())}");
+                return Path.Combine(Directory.GetCurrentDirectory());
             }
         }
 
@@ -65,8 +64,13 @@ namespace FolderSync
 
         private static void CreateLogFile(string path)
         {
-            if(!File.Exists(path))
+            if (!File.Exists(path))
                 File.Create(path).Dispose();
+        }
+        
+        private static bool IsPathInProgramDir(string path)
+        {
+            return path.StartsWith(Directory.GetCurrentDirectory()) || Directory.GetCurrentDirectory().StartsWith(path);
         }
 
         private static Config ParseArgs(IConfiguration config) // ParseArgs needs to be redone into something testable. I NEED TO FIGURE OUT HOW TO PREVENT NESTING OF SOURCE AND BAcKUP ROOTS
@@ -84,8 +88,8 @@ namespace FolderSync
             if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(dest))
                 throw new ArgumentException("Argument for source or destination folder is either empty or not a valid directory on your system");
                 
-            source = !ArePathsNested(source, dest) ? config["sourceFolder"] : throw new ArgumentException("The source and backup folders cannot be nested within each other");
-            dest = !ArePathsNested(source, dest) ? config["destFolder"] : throw new ArgumentException("The source and backup folders cannot be nested within each other");
+            source = !ArePathsNested(source, dest) && !IsPathInProgramDir(source) ? config["sourceFolder"] : throw new ArgumentException("The source and backup folders cannot be nested within each other");
+            dest = !ArePathsNested(source, dest) && !IsPathInProgramDir(dest) ? config["destFolder"] : throw new ArgumentException("The source and backup folders cannot be nested within each other");
 
             folderSyncConfig.SourceFolder = source;
             folderSyncConfig.BackupFolder = dest;
@@ -98,8 +102,18 @@ namespace FolderSync
             }
             else
             {
-                CreateLogFile(log);
-                folderSyncConfig.LogFilePath = log;
+                if (!ArePathsNested(source, log) && !ArePathsNested(dest, log))
+                {
+                    CreateLogFile(Path.Combine(log, logFileName));
+                    folderSyncConfig.LogFilePath = log;
+                }
+                else
+                {
+                    Console.WriteLine("The log folder cannot be nested within the source or backup folder. Defaulting to program directory.");
+                    string currentDir = Directory.GetCurrentDirectory();
+                    CreateLogFile(Path.Combine(currentDir, logFileName));
+                    folderSyncConfig.LogFilePath = currentDir;
+                }
             }
 
             return folderSyncConfig;
