@@ -12,6 +12,13 @@ namespace FolderSync
 
         public void RunInitialSync()
         {
+            if(!Directory.Exists(Config.SourceFolder))
+                throw new DirectoryNotFoundException($"Source folder '{Config.SourceFolder}' no longer exists");
+            if(!Directory.Exists(Config.BackupFolder))
+                throw new DirectoryNotFoundException($"Backup folder '{Config.BackupFolder}' no longer exists");
+            if(!Directory.Exists(Config.LogFilePath))
+                throw new DirectoryNotFoundException($"Log file path '{Config.LogFilePath}' no longer exists");
+            
             CheckForMissingDirs();
             CheckForDeletedFiles();
             CheckForDeletedDirs();
@@ -23,6 +30,12 @@ namespace FolderSync
         {
             while (true)
             {
+                if(!Directory.Exists(Config.SourceFolder))
+                    throw new DirectoryNotFoundException($"Source folder '{Config.SourceFolder}' no longer exists");
+                if(!Directory.Exists(Config.BackupFolder))
+                    throw new DirectoryNotFoundException($"Backup folder '{Config.BackupFolder}' no longer exists");
+                if(!Directory.Exists(Config.LogFilePath))
+                    throw new DirectoryNotFoundException($"Log file path '{Config.LogFilePath}' no longer exists");
                 CheckForMissingDirs();
                 CheckForModifiedFiles();
                 CheckForCopiesInSource();
